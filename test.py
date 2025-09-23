@@ -222,11 +222,54 @@ try:
                     color = (0, int(255 * alpha), int(255 * alpha * 0.4))
                     cv2.circle(frame, (tx, ty), radius, color, -1)
 
-                # Overlay some numeric info
-                cv2.putText(frame, f"pos: ({int(smoothed_pos[0])},{int(smoothed_pos[1])})", (10, 30),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-                cv2.putText(frame, f"vel: ({vel[0]:.1f},{vel[1]:.1f}) px/s", (10, 55),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1)
+                # Indices for landmarks
+                THUMB_TIP_IDX = 4
+                INDEX_TIP_IDX = 8
+                WRIST_IDX = 0
+                
+                # 1) Thumb & Index (image/pixel coords) — only if image-landmarks exist
+                if lm_list and len(lm_list) > max(THUMB_TIP_IDX, INDEX_TIP_IDX):
+                    thumb_lm = lm_list[THUMB_TIP_IDX]
+                    index_lm = lm_list[INDEX_TIP_IDX]
+                
+                    thumb_px = int(thumb_lm.x * frame_width)
+                    thumb_py = int(thumb_lm.y * frame_height)
+                    index_px = int(index_lm.x * frame_width)
+                    index_py = int(index_lm.y * frame_height)
+                
+                    # draw small circles for visual reference (thumb red, index yellow)
+                    cv2.circle(frame, (thumb_px, thumb_py), 6, (0, 0, 255), -1)      # red
+                    cv2.circle(frame, (index_px, index_py), 6, (0, 255, 255), -1)    # yellow
+                
+                    # overlay text lines
+                    cv2.putText(frame, f"thumb: ({thumb_px},{thumb_py})", (10, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+                    cv2.putText(frame, f"index: ({index_px},{index_py})", (10, 55),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (220, 220, 220), 1)
+                else:
+                    cv2.putText(frame, "thumb/index: N/A", (10, 30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.6, (200, 200, 200), 1)
+                
+                # 2) Wrist world landmark (x,y,z) — try to read from result.hand_world_landmarks
+                wrist_world_text_y = 80
+                wrist_world_available = False
+                try:
+                    if hasattr(result, "hand_world_landmarks") and result.hand_world_landmarks:
+                        raw_world = result.hand_world_landmarks[0]   # may be list or object-with-.landmark
+                        world_list = to_landmark_list(raw_world)
+                        if world_list and len(world_list) > WRIST_IDX:
+                            w = world_list[WRIST_IDX]
+                            # show 3 decimal places (typically meters or relative units)
+                            cv2.putText(frame, f"wrist_world: x={w.x:.3f} y={w.y:.3f} z={w.z:.3f}",
+                                        (10, wrist_world_text_y),
+                                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (200, 255, 200), 1)
+                            wrist_world_available = True
+                except Exception:
+                    wrist_world_available = False
+                
+                if not wrist_world_available:
+                    cv2.putText(frame, "wrist_world: N/A", (10, wrist_world_text_y),
+                                cv2.FONT_HERSHEY_SIMPLEX, 0.55, (150, 150, 150), 1)
             else:
                 # No hand detected: optionally decay trail slowly
                 if len(trail) > 0:
