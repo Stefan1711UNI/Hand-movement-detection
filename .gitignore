@@ -1,1 +1,4 @@
 recog-env/
+logs/
+plot_data.r
+plots/
