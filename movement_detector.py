@@ -17,6 +17,9 @@ except Exception:
     ZoneInfo = None
 import os
 
+#Kalman filter module
+from kalman_filter_test import Kalman3D
+
 model_path = "hand_landmarker.task"
 
 # 0 means webcam
@@ -49,6 +52,10 @@ VisionRunningMode = mp.tasks.vision.RunningMode
 csv_file = None
 csv_writer = None
 csv_lock = threading.Lock()
+
+#Kalman filter globals 
+kf = None
+kf_lock = threading.Lock()
 
 #Returns a timestamp string.
 def make_timestamp_string(use_local=True, fmt="%Y-%m-%d_%H-%M-%S"):
@@ -128,7 +135,7 @@ def close_csv():
 def print_result(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     print('hand landmarker result: {}'.format(result))
 
-
+#Updated to include kalman filter
 def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     try:
         # safe extraction of wrist world landmark (index 0)
@@ -159,9 +166,35 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
         # Wrist is index 0 in MediaPipe hand model
         if len(lm_list) > 0:
             w = lm_list[0]
-            # Print with reasonable precision
-            print(f"{timestamp_ms}: wrist_world: x={w.x:.6f}, y={w.y:.6f}, z={w.z:.6f}")
-            write_row_csv(timestamp_ms, "wrist_world", w.x, w.y, w.z)
+
+            #Raw measurements 
+            raw_x, raw_y, raw_z = float(w.x), float(w.y), float(w.z)
+            #Log raw measurements
+            write_row_csv(timestamp_ms, "wrist_world", raw_x, raw_y, raw_z)
+
+            #Kalman filter Update ------------------
+
+            #timestamp_ms is converted to seconds for filter
+            ts_s = timestamp_ms / 1000.0
+            filtered_accepted = True
+            mahal = 0.0
+            if kf is not None:
+                with kf_lock:
+                    # run predict+update on the filter
+                    filtered_accepted, mahal = kf.step(ts_s, (raw_x, raw_y, raw_z), gating_threshold=16.0)
+                    pos_f, vel_f = kf.get_state()
+            else:
+                # If kf not yet initialized, just copy raw -> filtered
+                pos_f = np.array([raw_x, raw_y, raw_z], dtype=float)
+                vel_f = np.array([0.0, 0.0, 0.0], dtype=float)
+
+            #Logs filtered measurements 
+            write_row_csv(timestamp_ms, "wrist_world_filtered", float(pos_f[0]), float(pos_f[1]), float(pos_f[2]))
+
+            #Print values to terminal
+            print(f"{timestamp_ms}: wrist_world: raw=({raw_x:.6f},{raw_y:.6f},{raw_z:.6f}) "
+                  f"filtered=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f}) mahal={mahal:.2f}")
+            
         else:
             print(f"{timestamp_ms}: wrist_world: N/A")
     
@@ -172,6 +205,9 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
 
 #Initialize CSV
 csv_path = init_csv(base_name="hand_log", out_dir="./logs", append=False, use_local_time=True)
+
+#Initialize Kalman filter ---------------
+kf = Kalman3D(initial_time=None, q=0.02)
 
 # Create a hand landmarker instance with the live stream mode:
 options = HandLandmarkerOptions(
