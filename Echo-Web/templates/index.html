@@ -1,18 +1,87 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LIVE STREAMING</title>
-    <style>
-        a {
-            font-size: 30px;
-        }
-    </style>
+  <meta charset="utf-8">
+  <title>Robot Arm Control</title>
+  <style>
+    body {
+      background: #101820;
+      color: #f0f4f8;
+      font-family: Arial, sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      margin: 0;
+    }
+    h1 {
+      margin-bottom: 20px;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+    #camera {
+      border: 3px solid #06b6d4;
+      border-radius: 8px;
+      width: 640px;
+      height: 480px;
+      background: #000;
+      object-fit: cover;
+    }
+    .controls {
+      margin-top: 20px;
+      display: flex;
+      gap: 10px;
+    }
+    button {
+      background: #06b6d4;
+      color: #001a24;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-size: 15px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #0891b2;
+    }
+    .danger {
+      background: #ef4444;
+      color: #fff;
+    }
+    .danger:hover {
+      background: #dc2626;
+    }
+  </style>
 </head>
 <body>
-    <video id="remoteVideo" autoplay></video>
-    <a href="{{ url_for('video_feed') }}" target="_self">Link to Video Feed</a>
-    <script src="{{ url_for('static', filename='main.js') }}"></script>
+  <h1>Robot Arm Camera Feed</h1>
+  <img id="camera" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+  
+  <div class="controls">
+    <button onclick="toggleFeed()">Pause / Resume</button>
+    <button class="danger" onclick="emergencyStop()">Emergency Stop</button>
+  </div>
+
+  <script>
+    const img = document.getElementById('camera');
+    let streaming = true;
+
+    function toggleFeed() {
+      if (streaming) {
+        img.src = '';
+        streaming = false;
+      } else {
+        img.src = "{{ url_for('video_feed') }}";
+        streaming = true;
+      }
+    }
+
+    function emergencyStop() {
+      fetch('/emergency_stop', { method: 'POST' })
+        .then(r => r.ok ? alert('Emergency stop sent!') : alert('Failed to send stop.'));
+    }
+  </script>
 </body>
 </html>
