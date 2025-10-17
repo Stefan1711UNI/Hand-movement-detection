@@ -18,7 +18,7 @@ except Exception:
 import os
 
 #Kalman filter module
-from kalman_filter_test import Kalman3D
+from kalman_filter import Kalman3D
 
 model_path = "hand_landmarker.task"
 
