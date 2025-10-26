@@ -1,0 +1,179 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Echo Arm — Live Wrist Visualization</title>
+  <style>
+    body { font-family: Inter, Arial, sans-serif; margin: 18px; color:#111 }
+    .row { display:flex; gap:16px; align-items:center; margin-bottom:12px; }
+    .bars { width:420px; }
+    .bar { height:18px; background:#eee; border-radius:8px; position:relative; overflow:hidden; }
+    .bar .fill { position:absolute; height:100%; left:50%; transform-origin:left center; background:#4a90e2; }
+    .label { width:90px; font-weight:600; }
+    .coords { font-family: monospace; background:#f7f7f7; padding:8px; border-radius:6px; min-width:320px; display:block; }
+    #tracker { border:1px solid #ddd; background:#fff; width:220px; height:220px; border-radius:6px; }
+    #status { font-size:0.9em; color:#666; margin-top:6px; }
+    button { padding:6px 10px; border-radius:6px; }
+    img#video { max-width:480px; border:1px solid #ccc; display:block; margin-bottom:12px; }
+  </style>
+</head>
+<body>
+  <h1>Echo Arm — Wrist live</h1>
+
+  <!-- This starts the camera + MediaPipe loop -->
+  <img id="video" src="{{ url_for('video_feed') }}" alt="video feed">
+
+  <div class="row">
+    <div>
+      <div class="row">
+        <div class="label">X (L/R)</div>
+        <div class="bars">
+          <div class="bar" id="bar-x"><div class="fill" id="fill-x"></div></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Y (Up/Down)</div>
+        <div class="bars">
+          <div class="bar" id="bar-y"><div class="fill" id="fill-y"></div></div>
+        </div>
+      </div>
+      <div class="row">
+        <div class="label">Z (Fwd/Bwd)</div>
+        <div class="bars">
+          <div class="bar" id="bar-z"><div class="fill" id="fill-z"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="coords" id="coords">Waiting for data...</div>
+      <div style="margin-top:8px;">
+        <button id="btn-calibrate">Calibrate Home</button>
+        <button id="btn-reset">Reset</button>
+      </div>
+      <div id="status">Polling: <span id="poll-status">stopped</span></div>
+    </div>
+
+    <div>
+      <canvas id="tracker" width="220" height="220"></canvas>
+      <div style="font-size:0.85em; color:#666; margin-top:6px;">Top-down: X (L/R) vs Z (Fwd/Bwd)</div>
+    </div>
+  </div>
+
+<script>
+(() => {
+  // --- CONFIG ---
+  const POLL_MS = 50; // 20 Hz
+  const SCALE = { x: 1500, y: 1500, z: 1500 }; // sensitivity; tweak in testing
+  const DEADZONE = 0.005; // meters
+  // ---------------
+
+  let home = null; // {x,y,z}
+  const state = { pos: {x:0,y:0,z:0}, vel: {x:0,y:0,z:0}, t:0 };
+
+  // DOM
+  const coordsEl = document.getElementById('coords');
+  const pollStatusEl = document.getElementById('poll-status');
+  const btnCal = document.getElementById('btn-calibrate');
+  const btnReset = document.getElementById('btn-reset');
+  const fills = { x: document.getElementById('fill-x'), y: document.getElementById('fill-y'), z: document.getElementById('fill-z') };
+  const canvas = document.getElementById('tracker'); const ctx = canvas.getContext('2d');
+
+  // Correct clamp using min and max parameters
+  function clamp(v, min = -1, max = 1) {
+    return Math.max(min, Math.min(max, v));
+  }
+  function applyDeadzone(v) {
+    if (Math.abs(v) < DEADZONE) return 0;
+    return v;
+  }
+
+  function drawBars(rel) {
+    // rel: {x,y,z} in meters relative to home
+    const nx = clamp(rel.x * SCALE.x / 1000, -1, 1);
+    const ny = clamp(rel.y * SCALE.y / 1000, -1, 1);
+    const nz = clamp(rel.z * SCALE.z / 1000, -1, 1);
+
+    // Position the fill elements using left and width
+    fills.x.style.left = '50%'; fills.x.style.width = (Math.abs(nx)*50)+'%';
+    fills.x.style.transform = nx >= 0 ? 'translateX(0)' : 'translateX(-100%)';
+    fills.y.style.left = '50%'; fills.y.style.width = (Math.abs(ny)*50)+'%';
+    fills.y.style.transform = ny >= 0 ? 'translateX(0)' : 'translateX(-100%)';
+    fills.z.style.left = '50%'; fills.z.style.width = (Math.abs(nz)*50)+'%';
+    fills.z.style.transform = nz >= 0 ? 'translateX(0)' : 'translateX(-100%)';
+  }
+
+  function drawTracker(rel) {
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const cx = canvas.width/2, cy = canvas.height/2;
+    ctx.fillStyle = '#f0f6ff'; ctx.fillRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = '#ddd'; ctx.beginPath(); ctx.moveTo(cx,0); ctx.lineTo(cx,canvas.height); ctx.moveTo(0,cy); ctx.lineTo(canvas.width,cy); ctx.stroke();
+    const px = cx + clamp(rel.x * SCALE.x / 1000, -1, 1) * (canvas.width/2 - 10);
+    const pz = cy - clamp(rel.z * SCALE.z / 1000, -1, 1) * (canvas.height/2 - 10);
+    ctx.fillStyle = '#4a90e2'; ctx.beginPath(); ctx.arc(px,pz,6,0,Math.PI*2); ctx.fill();
+  }
+
+  function render() {
+    const pos = state.pos;
+    if (!home) {
+      coordsEl.textContent = `No home. Current pos: x=${pos.x.toFixed(4)} y=${pos.y.toFixed(4)} z=${pos.z.toFixed(4)}`;
+      drawBars({x:0,y:0,z:0}); drawTracker({x:0,y:0,z:0});
+      return;
+    }
+    const rel = { x: applyDeadzone(pos.x - home.x), y: applyDeadzone(pos.y - home.y), z: applyDeadzone(pos.z - home.z) };
+    coordsEl.textContent = `t=${state.t} | pos: x=${pos.x.toFixed(4)} y=${pos.y.toFixed(4)} z=${pos.z.toFixed(4)} | vel: x=${state.vel.x.toFixed(4)} y=${state.vel.y.toFixed(4)} z=${state.vel.z.toFixed(4)}`;
+    drawBars(rel);
+    drawTracker(rel);
+  }
+
+  btnCal.onclick = () => {
+    home = { x: state.pos.x, y: state.pos.y, z: state.pos.z };
+    console.log('Calibrated home:', home);
+  };
+  btnReset.onclick = () => { home = null; };
+
+  // Poll /pose to update UI and call render()
+  let pollTimer = null;
+  async function pollPoseOnce() {
+    try {
+      const r = await fetch('/pose', {cache:'no-cache'});
+      if (!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      if (j && j.pos) {
+        state.t = j.t || Date.now();
+        state.pos.x = (j.pos.x !== null && j.pos.x !== undefined) ? j.pos.x : state.pos.x;
+        state.pos.y = (j.pos.y !== null && j.pos.y !== undefined) ? j.pos.y : state.pos.y;
+        state.pos.z = (j.pos.z !== null && j.pos.z !== undefined) ? j.pos.z : state.pos.z;
+        if (j.vel) {
+          state.vel.x = j.vel.x || 0;
+          state.vel.y = j.vel.y || 0;
+          state.vel.z = j.vel.z || 0;
+        }
+        pollStatusEl.textContent = 'ok';
+        render();
+      } else {
+        pollStatusEl.textContent = 'no pose';
+      }
+    } catch (e) {
+      pollStatusEl.textContent = 'error';
+      console.warn('pose poll error', e);
+    }
+  }
+
+  function startPolling() {
+    if (pollTimer) clearInterval(pollTimer);
+    pollTimer = setInterval(pollPoseOnce, POLL_MS);
+    pollStatusEl.textContent = 'polling';
+  }
+
+  function stopPolling() {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; pollStatusEl.textContent = 'stopped'; }
+  }
+
+  // start polling immediately
+  startPolling();
+
+})();
+</script>
+</body>
+</html>
