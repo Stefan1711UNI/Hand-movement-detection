@@ -1,11 +1,8 @@
 # Import necessary modules
-from flask import Flask, render_template, Response, request, jsonify, redirect, url_for
-import cv2
-import json
-import logging
-import time
+from flask import Flask, render_template, Response, request, jsonify
 
-from video_feed_handler import generate_frames
+from video_feed_handler import generate_frames, pose_lock, latest_pose
+
 
 # Create a Flask app instance
 app = Flask(__name__, static_url_path='/static')
@@ -21,6 +18,27 @@ def index():
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+@app.route('/demo')
+def movement_demo():
+    return render_template('movement.html')
+
+
+@app.route('/pose')
+def pose():
+    # return latest pose as JSON
+    with pose_lock:
+        # make a shallow copy to avoid races while flask serializes
+        copy = {
+            "t": latest_pose["t"],
+            "landmark": latest_pose["landmark"],
+            "pos": latest_pose["pos"],
+            "vel": latest_pose["vel"],
+            "valid": latest_pose["valid"]
+        }
+
+    return jsonify(copy)
+
 
 # Run the Flask app
 if __name__ == "__main__":

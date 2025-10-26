@@ -10,11 +10,9 @@ import time
 
 import threading
 
-import mediapipe as mp
-from types import SimpleNamespace
 
 #Kalman filter module
-#from kalman_filter import Kalman3D
+from kalman_filter import Kalman3D
 
 model_path = "other/hand_landmarker.task"
 
@@ -33,13 +31,21 @@ shared = {
 }
 shared_lock = threading.Lock()
 
+latest_pose = {
+    "t": None,
+    "landmark": "wrist",
+    "pos": None,   # {"x":..., "y":..., "z":...}
+    "vel": None,   # {"x":..., "y":..., "z":...}
+    "valid": False
+}
+pose_lock = threading.Lock()
 
 #Kalman filter globals 
 kf = None
-#kf_lock = threading.Lock()
+kf_lock = threading.Lock()
 
 #Initialize Kalman filter 
-#kf = Kalman3D(initial_time=None, q=0.02)
+kf = Kalman3D(initial_time=None, q=0.02)
 
 
 #--------------DRAWING HELPERS-----------------------
@@ -150,7 +156,27 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
             raw_x, raw_y, raw_z = float(w.x), float(w.y), float(w.z)
 
             #Print values to terminal
-           # print(f"{timestamp_ms}: wrist_world: raw=({raw_x:.6f},{raw_y:.6f},{raw_z:.6f})")
+            #print(f"{timestamp_ms}: wrist_world: raw=({raw_x:.6f},{raw_y:.6f},{raw_z:.6f})")
+
+            #Kalman filter
+            ts_s = timestamp_ms / 1000.0
+            filtered_accepted = True
+            mahal = 0.0
+            if kf is not None:
+                with kf_lock:
+                    # run predict+update on the filter
+                    filtered_accepted, mahal = kf.step(ts_s, (raw_x, raw_y, raw_z), gating_threshold=16.0)
+                    pos_f, vel_f = kf.get_state()
+
+
+            with pose_lock:
+                latest_pose["t"] = timestamp_ms
+                latest_pose["pos"] = {"x": float(pos_f[0]), "y": float(pos_f[1]), "z": float(pos_f[2])}
+                latest_pose["vel"] = {"x": float(vel_f[0]), "y": float(vel_f[1]), "z": float(vel_f[2])}
+                latest_pose["valid"] = bool(filtered_accepted)
+
+            print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
+            print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
             
         else:
             print(f"{timestamp_ms}: wrist_world: N/A")
