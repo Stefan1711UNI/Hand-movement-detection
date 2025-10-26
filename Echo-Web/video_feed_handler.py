@@ -127,16 +127,13 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
 
         # Normalize to a plain list of landmarks
         if hasattr(first_hand, "landmark"):
-            #print("First case")
             lm_list = first_hand.landmark
         elif isinstance(first_hand, (list, tuple)):
-            #print("Second case")
             lm_list = first_hand
             #print(lm_list)
         else:
             # Try converting to list as a last resort
             try:
-                #print("third case")
                 lm_list = list(first_hand)
             except Exception:
                 #print(f"{timestamp_ms}: wrist_world: N/A")
@@ -175,11 +172,12 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
                 latest_pose["vel"] = {"x": float(vel_f[0]), "y": float(vel_f[1]), "z": float(vel_f[2])}
                 latest_pose["valid"] = bool(filtered_accepted)
 
-            print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
-            print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
+            #print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
+            #print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
             
         else:
-            print(f"{timestamp_ms}: wrist_world: N/A")
+            #print(f"{timestamp_ms}: wrist_world: N/A")
+            pass
     
     # Print error
     except Exception as e:
