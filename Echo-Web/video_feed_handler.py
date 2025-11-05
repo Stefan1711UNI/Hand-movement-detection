@@ -14,6 +14,9 @@ import threading
 #Kalman filter module
 from kalman_filter import Kalman3D
 
+#Arm client
+from arm_client import send_angles_to_arm
+
 model_path = "other/hand_landmarker.task"
 
 #Options for task
@@ -174,6 +177,14 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
 
             #print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
             #print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
+
+
+            #-------------SEND ROBOT ARM COMMANDS----------------
+            #TODO ADD all calcs and other stuff idk
+            base_angle = int(pos_f[0] * 180)
+            print(f"X value: {base_angle}")
+            #Send to pico
+            send_angles_to_arm({0: base_angle})
             
         else:
             #print(f"{timestamp_ms}: wrist_world: N/A")
