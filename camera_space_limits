@@ -1,0 +1,15 @@
+RIGHT HAND
+X-axis left/right
+X_MIN = 0.00
+X_MAX = 0.05
+
+Y-axis up/down
+Y_MIN = 0.04
+Y_MAX = 0.10
+
+Z-axis closer/further (depth)
+Z_MIN = -0.01
+Z_MAX = 0.07
+
+
+LEFT HAND
