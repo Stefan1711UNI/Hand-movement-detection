@@ -9,7 +9,7 @@ BASE_URL = f"http://{PICO_IP}/set_angles"
 #Last time we sent a command
 last_request_time = 0
 #Lag in between each request
-REQUEST_THROTTLE = 0.05  
+REQUEST_THROTTLE = 0.5  #dont put 0.05 as it will lag the system too much
 
 #Sends a dictionary of angles {0: 90, 1: 45} to the Pico.
 def send_angles_to_arm(angles_dict):
@@ -26,12 +26,13 @@ def send_angles_to_arm(angles_dict):
     params = {f"j{joint}": angle for joint, angle in angles_dict.items()}
     
     try:
+        print(f"Attempting to send: {params} to {BASE_URL}")
         #Send the GET request
-        requests.get(BASE_URL, params=params, timeout=0.1)
-        print(f"Sent angles: {params}")
+        requests.get(BASE_URL, params=params, timeout=0.5)
+        print(f"   ...Success!")
         
     except requests.exceptions.Timeout:
         #If pico did not respond instantly
-        pass
+        print(f"   ...Failed: TIMEOUT.")
     except requests.exceptions.RequestException as e:
         print(f"Error sending to arm: {e}")

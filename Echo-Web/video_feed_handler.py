@@ -182,7 +182,7 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
             #-------------SEND ROBOT ARM COMMANDS----------------
             #TODO ADD all calcs and other stuff idk
             base_angle = int(pos_f[0] * 180)
-            print(f"X value: {base_angle}")
+            #print(f"X value: {base_angle}")
             #Send to pico
             send_angles_to_arm({0: base_angle})
             
