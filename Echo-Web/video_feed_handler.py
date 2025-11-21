@@ -7,15 +7,17 @@ from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
 import time
-
 import threading
-
+import math
 
 #Kalman filter module
 from kalman_filter import Kalman3D
 
 #Arm client
 from arm_client import send_angles_to_arm
+
+#Inverse-kinematics
+from ik_solver import calculate_ik
 
 model_path = "other/hand_landmarker.task"
 
@@ -37,8 +39,8 @@ shared_lock = threading.Lock()
 latest_pose = {
     "t": None,
     "landmark": "wrist",
-    "pos": None,   # {"x":..., "y":..., "z":...}
-    "vel": None,   # {"x":..., "y":..., "z":...}
+    "pos": None,   
+    "vel": None,   
     "valid": False
 }
 pose_lock = threading.Lock()
@@ -121,12 +123,10 @@ def remap_value(value, in_min, in_max, out_min, out_max):
     #Find the value as a percentage relative to the input range
     in_span = in_max - in_min
     in_percentage = (value - in_min) / in_span
-    print(f"Value: {value} \nin span: {in_span}, in percent: {in_percentage}%")
     
     #Apply the percentage to the output range
     out_span = out_max - out_min
     out_value = out_min + (in_percentage * out_span)
-    print(f"out span: {out_span}, out value: {out_value}")
     
     #Find real min/max
     true_out_min = min(out_min, out_max)
@@ -214,17 +214,60 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
             #Calibration ranges
             X_MIN, X_MAX = 0.01, 0.06 
             Y_MIN, Y_MAX = 0.04, 0.10 
-            Z_MIN, Z_MAX = -0.01, 0.07
+            Z_MIN, Z_MAX = -0.02, 0.06
+            #print(f"RAW Z: {pos_f[2]:.4f}")
             #Servo range
             SERVO_MIN, SERVO_MAX = 0, 180
-
+            #print(f"POSF: {pos_f[0]} : {pos_f[1]} : {pos_f[2]}")
             #---Mapping---
             # X-axis (left/right) -> Base (joint 0)
             base_angle = remap_value(pos_f[0], X_MIN, X_MAX, 180, 0)
 
+            target_height = remap_value(pos_f[1], Y_MIN, Y_MAX, -5.0, 18.0)     #old -6.0, 24.0
+
+            target_dist = remap_value(pos_f[2], Z_MIN, Z_MAX, 0.0, 16.0)      #old -17.0, 24.0
+
+            arm_angles = calculate_ik(target_dist, target_height)
+
+            
+            #print(f"ARM ANGELS: {arm_angles}")
+            if arm_angles:
+                temp_shoulder_angle = round(arm_angles['shoulder'])
+                elbow_angel = round(arm_angles['elbow'])
+                
+                if temp_shoulder_angle < 120:
+                    shoulder_angle = 120
+                elif temp_shoulder_angle > 180:
+                    shoulder_angle = 180
+                else:
+                    shoulder_angle = temp_shoulder_angle
+                
+            else:
+                shoulder_angle = None
+                elbow_angel = None
+
+
+            #---GRIPPER GESTURE CONTROLL
+            thumb_point= lm_list[4]
+            index_point = lm_list[8]
+
+            distance = math.sqrt((thumb_point.x - index_point.x)**2 + (thumb_point.y - index_point.y)**2)
+
+            GRIPPER_THRESHOLD = 0.02
+
+            gripper_angle = 0
+            if distance > GRIPPER_THRESHOLD:
+                gripper_angle = 90
+
+            #print(f"Gripper: distance = {distance}, gripper = {gripper_angle}")
+
             #---Send to pico---
-            print(f"Base: {base_angle}")
-            send_angles_to_arm({0 : base_angle})
+            #print(f"Base: {base_angle}, shoulder: {arm_angles['shoulder']}, elbow: {arm_angles['elbow']}")
+            send_angles_to_arm({0: 0,
+                                1: shoulder_angle,
+                                2: elbow_angel,
+                                5: gripper_angle
+                                })
             
             
         else:

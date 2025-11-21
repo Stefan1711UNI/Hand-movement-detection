@@ -2,7 +2,7 @@
 from flask import Flask, render_template, Response, request, jsonify
 
 from video_feed_handler import generate_frames, pose_lock, latest_pose
-
+    
 
 
 # Create a Flask app instance
