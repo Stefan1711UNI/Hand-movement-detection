@@ -1,52 +1,61 @@
 import math
 
-L1 = 12.0  # Length of Link 1 (Servo 2: shoulder-to-elbow) in cm
-L2 = 13.0  # Length of Link 2 (Servo 3: elbow-to-gripper) in cm
+#Arm Link Lengths (cm)
+L1 = 12.0  #Shoulder to Elbow
+L2 = 13.0  #Elbow to Gripper
+
+#Hardware Limits (Degrees)
+SHOULDER_MIN = 120
+SHOULDER_MAX = 170
+ELBOW_MIN = 0
+ELBOW_MAX = 160
+
+def apply_limits(value, value_min, value_max):
+    checked_value = max(value_min, min(value, value_max))
+    return checked_value
+
 
 def calculate_ik(target_dist, target_height):
-    # Calculate the direct-line distance (D) from the shoulder to the target
+    max_reach = L1 + L2 - 0.1 #0.1 is safety value
+    min_reach = abs(L1 - L2) + 0.1
+
+    #pythagorus theorum
     D = math.sqrt(target_dist**2 + target_height**2)
 
-    # --- Check if the target is reachable ---
-    if D > (L1 + L2):
-        print("IK_SOLVER: Target unreachable (too far)")
-        return None
-    if D < abs(L1 - L2):
-        print("IK_SOLVER: Target unreachable (too close)")
-        return None
-    
-    # --- Use the Law of Cosines to solve the arm triangle ---
-    # 1. Find the internal angle of the elbow (B)
-    # D^2 = L1^2 + L2^2 - 2*L1*L2*cos(B)
-    B_rad = math.acos((L1**2 + L2**2 - D**2) / (2 * L1 * L2))
-    
-    # The elbow servo angle is 180 degrees (pi) minus the internal angle
-    elbow_angle_rad = math.pi - B_rad
-    
-    # 2. Find the shoulder angle
-    # Find angle A1 (angle L1-D)
-    A1_rad = math.acos((L1**2 + D**2 - L2**2) / (2 * L1 * D))
-    # Find angle A2 (angle of the target relative to ground)
-    A2_rad = math.atan2(target_height, target_dist)
-    
-    # The final shoulder angle is the sum of these two
-    shoulder_angle_rad = A1_rad + A2_rad
+    #if past boundries we will not throw out the calculation, just bring it back withing safety margins
+    if D > max_reach:
+        scale = max_reach / D
+        D = D * scale
+        target_dist = target_dist * scale
+        target_height = target_height * scale
 
-    # --- Convert to degrees and return ---
-    angles = {
-        'shoulder': math.degrees(shoulder_angle_rad),
-        'elbow': math.degrees(elbow_angle_rad)
+    if D < min_reach:
+        scale = min_reach / D
+        D = D * scale
+        target_dist = target_dist * scale
+        target_height = target_height * scale
+
+
+    #Calc geometry
+    cos_angle_b = (L1**2 + L2**2 - D**2) / (2*L1*L2)
+    b_angle_rad = math.acos(apply_limits(cos_angle_b, -1.0, 1.0))
+    elbow_angle_rad = math.pi - b_angle_rad
+
+    #Shoulder angle (A1 + A2)
+    cos_angle_a1 = (L1**2 + D**2 - L2**2) / (2*L1*D)
+    a1_rad = math.acos(apply_limits(cos_angle_a1, -1.0, 1.0))
+    a2_rad = math.atan2(target_height, target_dist)
+    shoulder_angle_rad = a1_rad + a2_rad
+
+    #Convert to degrees
+    shoulder_deg = math.degrees(shoulder_angle_rad)
+    elbow_deg = math.degrees(elbow_angle_rad)
+
+    #Apply hardware limits
+    final_shoulder = apply_limits(shoulder_deg, SHOULDER_MIN, SHOULDER_MAX)
+    final_elbow = apply_limits(elbow_deg, ELBOW_MIN, ELBOW_MAX)
+
+    return {
+        'shoulder': final_shoulder,
+        'elbow': final_elbow
     }
-    
-    return angles
-
-if __name__ == "__main__":
-    # Test a point 12cm forward and 10cm up 
-    d = 12.0
-    h = 10.0
-    print(f"Calculating for target: {d}:{h}")
-    angles = calculate_ik(d, h)
-    
-    if angles:
-        print(f"  Shoulder (Servo 2): {angles['shoulder']:.2f}°")
-        print(f"  Elbow (Servo 3): {angles['elbow']:.2f}°")

@@ -8,16 +8,10 @@ import cv2
 import numpy as np
 import time
 import threading
-import math
+
 
 #Kalman filter module
 from kalman_filter import Kalman3D
-
-#Arm client
-from arm_client import send_angles_to_arm
-
-#Inverse-kinematics
-from ik_solver import calculate_ik
 
 #ROBOT CONTROLL
 from robot_controll import controll_arm
@@ -120,30 +114,6 @@ def draw_landmarks_adaptive(frame, landmark_list, image_w, image_h, connections)
 
 #---------------------------------------------------------------
 
-#Maps a value from one range (in_min to in_max) to another range (out_min to out_max).
-#-------------Remap  helpers-----------------
-def remap_value(value, in_min, in_max, out_min, out_max):    
-    #Find the value as a percentage relative to the input range
-    in_span = in_max - in_min
-    in_percentage = (value - in_min) / in_span
-    
-    #Apply the percentage to the output range
-    out_span = out_max - out_min
-    out_value = out_min + (in_percentage * out_span)
-    
-    #Find real min/max
-    true_out_min = min(out_min, out_max)
-    true_out_max = max(out_min, out_max)
-
-    #Saftey check to max sure the value is withing acceptable range
-    if out_value < true_out_min:
-        out_value = true_out_min
-    if out_value > true_out_max:
-        out_value = true_out_max
-    
-    return int(out_value)
-#--------------------------------------------
-
 
 def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     try:
@@ -206,75 +176,8 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
                 latest_pose["vel"] = {"x": float(vel_f[0]), "y": float(vel_f[1]), "z": float(vel_f[2])}
                 latest_pose["valid"] = bool(filtered_accepted)
 
-            #print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
-            #print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
-
-            #---CALIBRATE VIDEO SPACE TO ROBOT SPACE---
-            #print(f"CAMERA caleb: X: {pos_f[0]:.4f}, Y: {pos_f[1]:.4f}, Z: {pos_f[2]:.4f}")
-            #print(f"X: {pos_f[0]:.4f}")
             
-            #-------------SEND ROBOT ARM COMMANDS----------------
-            #Calibration ranges
-            X_MIN, X_MAX = 0.01, 0.06 
-            Y_MIN, Y_MAX = 0.04, 0.10 
-            Z_MIN, Z_MAX = -0.02, 0.06
-            #print(f"RAW Z: {pos_f[2]:.4f}")
-            #print(f"RAW x: {pos_f[0]:.4f}")
-            #print(f"RAW Y: {pos_f[1]:.4f}")
-            #Servo range
-            SERVO_MIN, SERVO_MAX = 0, 180
-            #print(f"POSF: {pos_f[0]} : {pos_f[1]} : {pos_f[2]}")
-            #---Mapping---
-            # X-axis (left/right) -> Base (joint 0)
-            # base_angle = remap_value(pos_f[0], X_MIN, X_MAX, 180, 0)
-
-            # target_height = remap_value(pos_f[1], Y_MIN, Y_MAX, -5.0, 18.0)     #old -6.0, 24.0
-
-            # target_dist = remap_value(pos_f[2], Z_MIN, Z_MAX, 0.0, 16.0)      #old -17.0, 24.0
-
-            # arm_angles = calculate_ik(target_dist, target_height)
-
-            
-            #print(f"ARM ANGELS: {arm_angles}")
-            # if arm_angles:
-            #     temp_shoulder_angle = round(arm_angles['shoulder'])
-            #     elbow_angel = round(arm_angles['elbow'])
-                
-            #     if temp_shoulder_angle < 120:
-            #         shoulder_angle = 120
-            #     elif temp_shoulder_angle > 180:
-            #         shoulder_angle = 180
-            #     else:
-            #         shoulder_angle = temp_shoulder_angle
-                
-            # else:
-            #     shoulder_angle = None
-            #     elbow_angel = None
-
-
-            # #---GRIPPER GESTURE CONTROLL
-            # thumb_point= lm_list[4]
-            # index_point = lm_list[8]
-
-            # distance = math.sqrt((thumb_point.x - index_point.x)**2 + (thumb_point.y - index_point.y)**2)
-
-            # GRIPPER_THRESHOLD = 0.02
-
-            # gripper_angle = 0
-            # if distance > GRIPPER_THRESHOLD:
-            #     gripper_angle = 90
-
-            #print(f"Gripper: distance = {distance}, gripper = {gripper_angle}")
-
-            #---Send to pico---
-            #print(f"Base: {base_angle}, shoulder: {arm_angles['shoulder']}, elbow: {arm_angles['elbow']}")
-            # send_angles_to_arm({0: 0,
-            #                     1: shoulder_angle,
-            #                     2: elbow_angel,
-            #                     5: gripper_angle
-            #                     })
-
-            #----------------NEW-------------------------
+            #----------------ROBOT CONTROLL-------------------------
             thumb_point= lm_list[4]
             index_point = lm_list[8]
 

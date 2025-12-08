@@ -20,7 +20,7 @@ def index():
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/demo')     
+@app.route('/demo')       
 def movement_demo():
     return render_template('movement.html')
 
