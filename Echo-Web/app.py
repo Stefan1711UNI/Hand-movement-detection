@@ -3,7 +3,7 @@ from flask import Flask, render_template, Response, request, jsonify
 
 from video_feed_handler import generate_frames, pose_lock, latest_pose
     
-
+from robot_controll import robot_state
 
 # Create a Flask app instance
 app = Flask(__name__, static_url_path='/static')
@@ -22,8 +22,11 @@ def video_feed():
 
 @app.route('/demo')       
 def movement_demo():
-    return render_template('movement.html')
+    return render_template('tmp.html')
 
+@app.route("/emergency_stop")
+def eme_stop():
+    pass
 
 @app.route('/pose')
 def pose():
@@ -31,11 +34,7 @@ def pose():
     with pose_lock:
         # make a shallow copy to avoid races while flask serializes
         copy = {
-            "t": latest_pose["t"],
-            "landmark": latest_pose["landmark"],
-            "pos": latest_pose["pos"],
-            "vel": latest_pose["vel"],
-            "valid": latest_pose["valid"]
+            "robot": robot_state
         }
 
     return jsonify(copy)
