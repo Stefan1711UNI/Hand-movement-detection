@@ -16,6 +16,10 @@ from kalman_filter import Kalman3D
 #ROBOT CONTROLL
 from robot_controll import controll_arm
 
+#CSV LOG
+import csv
+from datetime import datetime
+
 model_path = "other/hand_landmarker.task"
 
 #Options for task
@@ -114,6 +118,14 @@ def draw_landmarks_adaptive(frame, landmark_list, image_w, image_h, connections)
 
 #---------------------------------------------------------------
 
+#CSV LOGGER
+csv_filename = "hand_tracking_data_circle.csv"
+csv_file = open(csv_filename, mode='w', newline='')
+csv_writer = csv.writer(csv_file)
+# Write Header
+csv_writer.writerow(["Timestamp_ms","Time", "Raw_X", "Raw_Y", "Raw_Z", 
+                     "Kalman_X", "Kalman_Y", "Kalman_Z"])
+
 
 def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     try:
@@ -176,7 +188,14 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
                 latest_pose["vel"] = {"x": float(vel_f[0]), "y": float(vel_f[1]), "z": float(vel_f[2])}
                 latest_pose["valid"] = bool(filtered_accepted)
 
-            
+            #LOG DATA
+            # readable_time = datetime.fromtimestamp(timestamp_ms / 1000.0).strftime('%H:%M:%S.%f')[:-3]
+            # csv_writer.writerow([timestamp_ms,
+            #                     readable_time,
+            #                     raw_x, raw_y, raw_z,
+            #                     float(pos_f[0]), float(pos_f[1]), float(pos_f[2])])
+
+
             #----------------ROBOT CONTROLL-------------------------
             thumb_point= lm_list[4]
             index_point = lm_list[8]
