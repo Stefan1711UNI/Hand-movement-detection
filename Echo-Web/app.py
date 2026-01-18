@@ -1,7 +1,7 @@
 # Import necessary modules
-from flask import Flask, render_template, Response, request, jsonify
+from flask import Flask, render_template, Response, jsonify
 
-from video_feed_handler import generate_frames, pose_lock, latest_pose
+from video_feed_handler import generate_frames, pose_lock
     
 from robot_controll import robot_state
 
@@ -20,9 +20,6 @@ def index():
 def video_feed():
     return Response(generate_frames(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-@app.route('/demo')       
-def movement_demo():
-    return render_template('tmp.html')
 
 @app.route("/emergency_stop")
 def eme_stop():

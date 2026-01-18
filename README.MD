@@ -1,4 +1,4 @@
-# Echo Arm - Hand Movement Detection Project
+# Robot Arm - Hand Movement Detection Project
 
 This project uses MediaPipe's Hand Landmarker model to detect user hand movements via a webcam. A web-based UI displays the camera feed with landmark overlays and provides real-time wrist position data. This part focuses on the computer vision aspect for controlling a future robot arm.
 
@@ -59,5 +59,15 @@ This project uses MediaPipe's Hand Landmarker model to detect user hand movement
 
 * The MediaPipe hand landmark model (`other/hand_landmarker.task`) is included in the repository.
 * The application uses Flask to serve the web UI and video stream.
-* `video_feed_handler.py` contains the main logic for capturing video, running the MediaPipe model, applying a Kalman filter for smoothing, and drawing landmarks.
+* `video_feed_handler.py` contains the main logic for capturing video, running the MediaPipe model, applying a Alpha Beta Filter for smoothing, and drawing landmarks.
 * Make sure your webcam is connected and accessible by the system.
+
+## Get the Robot Controll code
+**Clone the Repository:**
+    Open your terminal or command prompt and run:
+    ```bash
+    git clone https://github.com/Stefan1711UNI/Robot_Arm.git
+    cd Robot_Arm
+    ```
+
+*Connect the Pico, and run main.py

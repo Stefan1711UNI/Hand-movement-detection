@@ -1,5 +1,3 @@
 recog-env/
 __pycache__/
 *.pyc
-hand_tracking_data_hold.csv
-viz_kal.py

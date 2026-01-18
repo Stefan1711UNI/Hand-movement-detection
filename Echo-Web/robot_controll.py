@@ -74,10 +74,7 @@ def controll_arm(pos_f, thumb_point, index_point):
     y_diff = pos_f[1] - Y_CENTER
 
     if abs(y_diff) > Y_DEADZONE:
-        #current_height -= y_diff * 50 * SPEED   #150
         current_height_cm -= y_diff * 80 * SPEED 
-
-    #current_height = max(0, min(160, current_height))
     
     current_height_cm = max(0, min(35, current_height_cm)) #IK
     
@@ -88,7 +85,6 @@ def controll_arm(pos_f, thumb_point, index_point):
     if abs(z_diff) > Z_DEADZONE:
         current_reach_cm -= z_diff * 50 * SPEED   #100
 
-    #current_reach = max(120, min(180, current_reach))
     current_reach_cm = max(2, min(25, current_reach_cm)) #IK
 
     #Expotential Smoothing (EMA)
@@ -96,8 +92,6 @@ def controll_arm(pos_f, thumb_point, index_point):
     target_height_cm = ema_calc(current_height_cm, target_height_cm, alpha)
     target_reach_cm = ema_calc(current_reach_cm, target_reach_cm, alpha)
 
-    #current_reach = max(0, min(16, current_reach))
-    #arm_angles = {'shoulder' : target_reach, 'elbow' : target_height}
     arm_angles = calculate_ik(current_reach_cm, current_height_cm)
 
     #---GRIPPER GESTURE CONTROLL
@@ -107,12 +101,6 @@ def controll_arm(pos_f, thumb_point, index_point):
     gripper_angle = 120
     if distance < GRIPPER_THRESHOLD:
         gripper_angle = 60
-
-    #print(f"DIFF -> X: {x_diff:.3f} | Y: {y_diff:.3f} | Z: {z_diff:.3f}")
-    #print(f"HEIGHT: {current_height}\nREACH: {current_reach}")
-    #print(f"ZAXIS: diff:{z_diff:.3f}\nposf:{pos_f[2]}\nreach:{current_reach}")
-    #print(f"reach:{current_reach}")
-    #print(f"diff Y: {y_diff:.3f} | h: :{current_height}" )
 
     #SEND TO ARM
     if arm_angles:
@@ -126,13 +114,6 @@ def controll_arm(pos_f, thumb_point, index_point):
 
         #Diagram angles
         dia_shoulder = round(arm_angles['Diagram_shoulder'])
-
-        # print(f"Pre Vals: B={round(current_base)}, H={round(current_height)}, R={round(current_reach)}\n"
-        #   f"EMA Vals: B={fin_current_base}, H={fin_elbow_angle}, R={fin_shoulder_angle}\n")
-
-        #print(f"limited reach:{shoulder_angle}")
-
-        # print(f"Coords: ({smooth_reach_cm:.1f}, {smooth_height_cm:.1f}) -> Angles: B{fin_base} S{fin_shoulder} E{fin_elbow}")
 
         # UPDATE THE SHARED STATE DICTIONARY
         robot_state["base"] = fin_current_base
