@@ -7,12 +7,20 @@ from mediapipe.tasks.python import vision
 import cv2
 import numpy as np
 import time
-
 import threading
 
 
 #Kalman filter module
 from kalman_filter import Kalman3D
+#Alpha beta Filter
+from alpha_beta_filter import a_b_filter
+
+#ROBOT CONTROLL
+from robot_controll import controll_arm
+
+#CSV LOG
+import csv
+from datetime import datetime
 
 model_path = "other/hand_landmarker.task"
 
@@ -34,8 +42,8 @@ shared_lock = threading.Lock()
 latest_pose = {
     "t": None,
     "landmark": "wrist",
-    "pos": None,   # {"x":..., "y":..., "z":...}
-    "vel": None,   # {"x":..., "y":..., "z":...}
+    "pos": None,   
+    "vel": None,   
     "valid": False
 }
 pose_lock = threading.Lock()
@@ -46,6 +54,9 @@ kf_lock = threading.Lock()
 
 #Initialize Kalman filter 
 kf = Kalman3D(initial_time=None, q=0.02)
+
+ab_filter = None
+ab_filter = a_b_filter(initial_time=None)
 
 
 #--------------DRAWING HELPERS-----------------------
@@ -110,6 +121,17 @@ def draw_landmarks_adaptive(frame, landmark_list, image_w, image_h, connections)
             except Exception:
                 continue
 
+#---------------------------------------------------------------
+
+#CSV LOGGER
+# csv_filename = "data.csv"
+# csv_file = open(csv_filename, mode='w', newline='')
+# csv_writer = csv.writer(csv_file)
+# # Write Header
+# csv_writer.writerow(["Timestamp_ms","Time", "Raw_X", "Raw_Y", "Raw_Z", 
+#                      "Kalman_X", "Kalman_Y", "Kalman_Z",
+#                      "New_Kalman_X", "New_Kalman_Y", "New_Kalman_Z"])
+
 
 def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_ms: int):
     try:
@@ -130,7 +152,6 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
             lm_list = first_hand.landmark
         elif isinstance(first_hand, (list, tuple)):
             lm_list = first_hand
-            #print(lm_list)
         else:
             # Try converting to list as a last resort
             try:
@@ -152,9 +173,6 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
             #Raw measurements 
             raw_x, raw_y, raw_z = float(w.x), float(w.y), float(w.z)
 
-            #Print values to terminal
-            #print(f"{timestamp_ms}: wrist_world: raw=({raw_x:.6f},{raw_y:.6f},{raw_z:.6f})")
-
             #Kalman filter
             ts_s = timestamp_ms / 1000.0
             filtered_accepted = True
@@ -165,15 +183,36 @@ def print_data(result: HandLandmarkerResult, output_image: mp.Image, timestamp_m
                     filtered_accepted, mahal = kf.step(ts_s, (raw_x, raw_y, raw_z), gating_threshold=16.0)
                     pos_f, vel_f = kf.get_state()
 
+            #Alpha Beta Filter
+            new_ts_s = timestamp_ms / 1000.0
+            alpha_filter_accepted = True
+            if ab_filter is not None:
+                with kf_lock:
+                    # run predict+update on the filter
+                    alpha_filter_accepted = ab_filter.step(new_ts_s, (raw_x, raw_y, raw_z))
+                    pos_n, vel_n = ab_filter.get_state()
+
 
             with pose_lock:
                 latest_pose["t"] = timestamp_ms
-                latest_pose["pos"] = {"x": float(pos_f[0]), "y": float(pos_f[1]), "z": float(pos_f[2])}
-                latest_pose["vel"] = {"x": float(vel_f[0]), "y": float(vel_f[1]), "z": float(vel_f[2])}
-                latest_pose["valid"] = bool(filtered_accepted)
+                latest_pose["pos"] = {"x": float(pos_n[0]), "y": float(pos_n[1]), "z": float(pos_n[2])}
+                latest_pose["vel"] = {"x": float(vel_n[0]), "y": float(vel_n[1]), "z": float(vel_n[2])}
+                latest_pose["valid"] = bool(alpha_filter_accepted)
 
-            #print(f"{timestamp_ms}: wrist_world: raw=({pos_f[0]:.6f},{pos_f[1]:.6f},{pos_f[2]:.6f})")
-            #print(f"{timestamp_ms}: velosity: ({vel_f[0]:.6f},{vel_f[1]:.6f},{vel_f[2]:.6f})")
+            #LOG DATA
+            # readable_time = datetime.fromtimestamp(timestamp_ms / 1000.0).strftime('%H:%M:%S.%f')[:-3]
+            # csv_writer.writerow([timestamp_ms,
+            #                     readable_time,
+            #                     raw_x, raw_y, raw_z,
+            #                     float(pos_f[0]), float(pos_f[1]), float(pos_f[2]),
+            #                     float(pos_n[0]), float(pos_n[1]), float(pos_n[2])])
+
+            #----------------ROBOT CONTROLL-------------------------
+            thumb_point= lm_list[4]
+            index_point = lm_list[8]
+
+            controll_arm(pos_f, thumb_point, index_point)
+            
             
         else:
             #print(f"{timestamp_ms}: wrist_world: N/A")

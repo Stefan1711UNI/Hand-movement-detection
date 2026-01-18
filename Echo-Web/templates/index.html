@@ -7,7 +7,7 @@
     body {
       background: #101820;
       color: #f0f4f8;
-      font-family: Arial, sans-serif;
+      font-family: 'Segoe UI', Arial, sans-serif;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -15,11 +15,15 @@
       height: 100vh;
       margin: 0;
     }
-    h1 {
-      margin-bottom: 20px;
-      font-weight: 500;
-      letter-spacing: 0.5px;
+    h1 { margin-bottom: 20px; font-weight: 500; letter-spacing: 0.5px; }
+    
+    /* Layout Container */
+    .main-container {
+      display: flex;
+      gap: 20px;
+      align-items: flex-start;
     }
+
     #camera {
       border: 3px solid #06b6d4;
       border-radius: 8px;
@@ -28,6 +32,36 @@
       background: #000;
       object-fit: cover;
     }
+
+    /* Diagram Sidebar */
+    .sidebar {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .diagram-box {
+      background: #1a2634;
+      border: 2px solid #334155;
+      border-radius: 8px;
+      padding: 10px;
+      text-align: center;
+    }
+
+    canvas {
+      background: #0f172a;
+      border-radius: 4px;
+      box-shadow: inset 0 0 10px #000;
+    }
+
+    .data-display {
+      font-family: monospace;
+      color: #06b6d4;
+      font-size: 14px;
+      text-align: left;
+      line-height: 1.5;
+    }
+
     .controls {
       margin-top: 20px;
       display: flex;
@@ -43,21 +77,32 @@
       cursor: pointer;
       transition: background 0.2s;
     }
-    button:hover {
-      background: #0891b2;
-    }
-    .danger {
-      background: #ef4444;
-      color: #fff;
-    }
-    .danger:hover {
-      background: #dc2626;
-    }
+    button:hover { background: #0891b2; }
+    .danger { background: #ef4444; color: #fff; }
+    .danger:hover { background: #dc2626; }
   </style>
 </head>
 <body>
   <h1>Robot Arm Camera Feed</h1>
-  <img id="camera" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+  
+  <div class="main-container">
+    <!-- Camera Feed -->
+    <img id="camera" src="{{ url_for('video_feed') }}" alt="Camera Feed">
+
+    <!-- Arm Diagram Sidebar -->
+    <div class="sidebar">
+      <div class="diagram-box">
+        <div style="margin-bottom:5px; color:#cbd5e1;">Side View (Reach vs Height)</div>
+        <canvas id="sideCanvas" width="250" height="250"></canvas>
+      </div>
+      
+      <div class="diagram-box">
+        <div class="data-display" id="armData">
+          Waiting for data...
+        </div>
+      </div>
+    </div>
+  </div>
   
   <div class="controls">
     <button onclick="toggleFeed()">Pause / Resume</button>
@@ -70,18 +115,125 @@
 
     function toggleFeed() {
       if (streaming) {
-        img.src = '';
-        streaming = false;
+        img.src = ''; streaming = false;
       } else {
-        img.src = "{{ url_for('video_feed') }}";
-        streaming = true;
+        img.src = "{{ url_for('video_feed') }}"; streaming = true;
       }
     }
 
     function emergencyStop() {
       fetch('/emergency_stop', { method: 'POST' })
-        .then(r => r.ok ? alert('Emergency stop sent!') : alert('Failed to send stop.'));
+        .then(r => r.ok ? alert('Stop sent!') : alert('Error sending stop'));
     }
+
+    // --- DRAWONG ROBOT ARM CONFIG ---
+    const L1 = 12.0; // cm
+    const L2 = 13.0; // cm
+    const L3 = 10.0;  // cm (Wrist -> Gripper Tip)
+    const SCALE = 6; // pixels per cm
+    const OX = 40;   // Origin X (Shoulder)
+    const OY = 200;  // Origin Y (Shoulder)
+    
+    // Canvas Setup
+    const canvas = document.getElementById('sideCanvas');
+    const ctx = canvas.getContext('2d');
+    const infoBox = document.getElementById('armData');
+
+    // --- DIAGRAM DRAWING ---
+    function drawArm(shoulderDeg, elbowDeg, wristDeg) {
+      // Clear
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      
+      //Draw x/y axis
+      ctx.strokeStyle = '#334155'; ctx.lineWidth = 1; 
+      ctx.beginPath(); ctx.moveTo(OX, OY); ctx.lineTo(OX+200, OY); ctx.stroke(); // X
+      ctx.beginPath(); ctx.moveTo(OX, OY); ctx.lineTo(OX, OY-200); ctx.stroke(); // Y
+
+      // Calculate Joints based on Angles (Forward Kinematics for Display)
+      // We convert Angle -> Radians -> Pixel Coordinates
+      const radS = shoulderDeg * (Math.PI / 180);
+      const radE = elbowDeg * (Math.PI / 180);
+      const radW = wristDeg * (Math.PI / 180);
+
+      // Elbow Position
+      // Note: Canvas Y is flipped (0 is top), so we subtract sin()
+      const Ex = OX + (L1 * Math.cos(radS)) * SCALE;
+      const Ey = OY - (L1 * Math.sin(radS)) * SCALE;
+
+      // Wrist Position
+      // The Elbow angle is usually relative to the upper arm
+      // Global Angle of forearm = Shoulder Angle - Elbow Angle
+      const globalArmAngle = radS - radE;
+      const Wx = Ex + (L2 * Math.cos(globalArmAngle)) * SCALE;
+      const Wy = Ey - (L2 * Math.sin(globalArmAngle)) * SCALE;
+
+      //Gripper Tip Position (Wrist -> Tip)
+      const globalGripperAngle = globalArmAngle + radW;
+      const Gx = Wx + (L3 * Math.cos(globalGripperAngle)) * SCALE;
+      const Gy = Wy - (L3 * Math.sin(globalGripperAngle)) * SCALE;
+
+      // Draw Links
+      ctx.lineWidth = 5; ctx.lineCap = 'round';
+
+      // Shoulder -> Elbow (Cyan)
+      ctx.strokeStyle = '#06b6d4';
+      ctx.beginPath(); ctx.moveTo(OX, OY); ctx.lineTo(Ex, Ey); ctx.stroke();
+
+      // Elbow -> Wrist (Purple)
+      ctx.strokeStyle = '#d946ef';
+      ctx.beginPath(); ctx.moveTo(Ex, Ey); ctx.lineTo(Wx, Wy); ctx.stroke();
+
+      // Wrist -> Gripper (Orange) 
+      ctx.strokeStyle = '#f97316';
+      ctx.beginPath(); ctx.moveTo(Wx, Wy); ctx.lineTo(Gx, Gy); ctx.stroke();
+
+      // Joints (White dots)
+      ctx.fillStyle = '#fff';
+      // Shoulder Joint
+      ctx.beginPath(); ctx.arc(OX, OY, 4, 0, Math.PI*2); ctx.fill();
+      // Elbow Joint
+      ctx.beginPath(); ctx.arc(Ex, Ey, 4, 0, Math.PI*2); ctx.fill();
+      // Wrist Joint
+      ctx.beginPath(); ctx.arc(Wx, Wy, 4, 0, Math.PI*2); ctx.fill();
+      //Gripper
+      ctx.fillStyle = '#22c55e'; // Green Tip
+      ctx.beginPath(); ctx.arc(Gx, Gy, 3, 0, Math.PI*2); ctx.fill();
+    }
+
+    // --- DATA POLLING ---
+    async function updateData() {
+      try {
+        const res = await fetch('/pose');
+        const data = await res.json();
+        
+        if (data.robot) {
+          const r = data.robot;
+          
+          // Update Text
+          infoBox.innerHTML = `
+            <strong>Servo Angles:</strong><br>
+            Shoulder: ${r.shoulder_angle}°<br>
+            Elbow:    ${r.elbow_angle}°<br>
+            Base (X):   ${r.base}°<br>
+            Gripper:  ${r.gripper}°<br>
+            Wrist:  ${r.wrist_angle}°<br>
+            <hr style="border-color:#334155">
+            <strong>Coordinates:</strong><br>
+            Reach (Z):  ${r.reach.toFixed(1)} cm<br>
+            Height (Y): ${r.height.toFixed(1)} cm<br>
+          `;
+
+          // Update Diagram
+          drawArm(r.shoulder_angle, r.elbow_angle, r.wrist_angle);
+        }
+      } catch (err) {
+        console.error("Polling error", err);
+      }
+    }
+
+    // Update every 100ms (10fps)
+    setInterval(updateData, 100);
+
   </script>
 </body>
 </html>
